@@ -28,8 +28,8 @@ body{background:var(--forest);color:var(--cream);font-family:'Lato',sans-serif;m
 .bird-card{background:rgba(20,50,35,.75);border:1px solid rgba(201,168,76,.15);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .25s,border-color .25s,box-shadow .25s;backdrop-filter:blur(8px);animation:fadeInUp .5s ease both;}
 .bird-card:hover{transform:translateY(-6px) scale(1.02);border-color:var(--gold);box-shadow:0 20px 40px rgba(0,0,0,.4),0 0 20px rgba(201,168,76,.15);}
 .card-img-wrap{overflow:hidden;position:relative;}
-.card-img-wrap{background:#132a1e;height:190px;overflow:hidden;}
-@media(max-width:600px){.card-img-wrap{height:130px;}}
+.card-img-wrap{background:#132a1e;overflow:hidden;aspect-ratio:4/3;}
+@media(max-width:600px){.card-img-wrap{aspect-ratio:3/2;}}
 .card-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .4s;}
 .bird-card:hover .card-img{transform:scale(1.1);}
 .card-status{position:absolute;top:8px;right:8px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:10px;background:rgba(26,58,42,.85);backdrop-filter:blur(4px);}
@@ -52,11 +52,13 @@ body{background:var(--forest);color:var(--cream);font-family:'Lato',sans-serif;m
 .modal-overlay.active .modal{transform:translateY(0) scale(1);}
 .modal-inner{display:grid;grid-template-columns:1fr 1fr;gap:0;}
 @media(max-width:640px){.modal-inner{grid-template-columns:1fr;}}
-.modal-img-side{position:relative;min-height:300px;}
-.modal-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:20px 0 0 20px;}
-@media(max-width:640px){.modal-img{border-radius:20px 20px 0 0;max-height:260px;}}
+.modal-img-side{position:relative;min-height:300px;background:#0d2418;}
+@media(max-width:640px){.modal-img-side{min-height:unset;height:280px;background:#0d2418;}}
+.modal-img{width:100%;height:100%;object-fit:contain;display:block;border-radius:20px 0 0 20px;}
+@media(max-width:640px){.modal-img{border-radius:20px 20px 0 0;object-fit:contain;}}
 .modal-img-overlay{position:absolute;inset:0;background:linear-gradient(to right,transparent 60%,#1e4a3088);border-radius:20px 0 0 20px;pointer-events:none;}
 .modal-info{padding:32px 28px;display:flex;flex-direction:column;}
+@media(max-width:640px){.modal-info{padding:20px 18px;}}
 .modal-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:var(--cream);width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;z-index:10;}
 .modal-close:hover{background:rgba(255,255,255,.2);}
 .modal-family-tag{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:10px;}
@@ -213,8 +215,6 @@ async function fetchWikiImage(bird, imgEl, cardEl) {
       if (src) {
         imgCache[bird.scientific] = src;
         imgEl.src = src;
-        imgEl.style.objectFit = 'cover';
-        imgEl.style.padding = '0';
         return;
       }
     }
@@ -254,7 +254,6 @@ async function fetchModalWikiImage(bird) {
       const src = page?.thumbnail?.source;
       if (src) {
         document.getElementById('modal-img').src = src;
-        document.getElementById('modal-img').style.objectFit = 'cover';
         return;
       }
     }
@@ -267,12 +266,26 @@ async function fetchBirdCall(scientific, name){
   document.getElementById('audio-controls').style.display='none';
 
   async function tryFetch(query){
-    const url=`https://xeno-canto.org/api/2/recordings?query=${encodeURIComponent(query)}`;
-    console.log('[XC] Fetching:', url);
-    const res=await fetch(url);
-    console.log('[XC] Response status:', res.status);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data=await res.json();
+    const xcUrl=`https://xeno-canto.org/api/2/recordings?query=${encodeURIComponent(query)}`;
+    console.log('[XC] Fetching:', xcUrl);
+    // Try direct first, then CORS proxy fallback
+    let res, data;
+    try {
+      res = await fetch(xcUrl);
+      console.log('[XC] Direct status:', res.status);
+      if(res.ok) { data = await res.json(); }
+    } catch(e) { console.log('[XC] Direct failed:', e.message); }
+    
+    if(!data) {
+      try {
+        const proxy = `https://corsproxy.io/?${encodeURIComponent(xcUrl)}`;
+        res = await fetch(proxy);
+        console.log('[XC] Proxy status:', res.status);
+        if(res.ok) data = await res.json();
+      } catch(e) { console.log('[XC] Proxy failed:', e.message); }
+    }
+    
+    if(!data) throw new Error('Both direct and proxy failed');
     console.log('[XC] Recordings found:', data.numRecordings);
     return (data.recordings && data.recordings.length>0) ? data.recordings : null;
   }
